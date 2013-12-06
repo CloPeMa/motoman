@@ -32,7 +32,7 @@
 #ifndef CONTROLLER_H
 #define CONTROLLER_H
 
-//#define DX100          // Define to compile for DX100 controller  
+#define DX100          // Define to compile for DX100 controller  
 
 #define TCP_PORT_MOTION	50240
 #define TCP_PORT_STATE	50241

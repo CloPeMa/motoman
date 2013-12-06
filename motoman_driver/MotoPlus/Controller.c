@@ -115,13 +115,17 @@ BOOL Ros_Controller_Init(Controller* controller)
 	
 	// Get the interpolation clock
 	status = GP_getInterpolationPeriod(&controller->interpolPeriod);
-	if(status!=OK)
+	if(status!=OK) {
+        printf("GP_getInterpolationPeriod != OK\r\n");
 		bInitOk = FALSE;
+    }
 	
 	// Get the number of groups
 	controller->numGroup = GP_getNumberOfGroups();
-	if(controller->numGroup < 1)
+	if(controller->numGroup < 1) {
+        printf("GP_getNumberOfGroups < 1\r\n");
 		bInitOk = FALSE;
+    }
 	
 	controller->numRobot = 0;
 	
@@ -137,8 +141,10 @@ BOOL Ros_Controller_Init(Controller* controller)
 				if(Ros_CtrlGroup_IsRobot(controller->ctrlGroups[grpNo]))
 					controller->numRobot++;
 			}
-			else
+			else {
+                printf("Ros_CtrlGroup_Create == NULL\r\n");
 				bInitOk = FALSE;
+            }
 		}
 		else
 			controller->ctrlGroups[grpNo] = NULL;
@@ -165,7 +171,7 @@ BOOL Ros_Controller_Init(Controller* controller)
 	controller->bSkillMotionReady[1] = FALSE;
 #endif
 
-	if(bInitOk)
+	if(bInitOk == TRUE)
 	{
 		// Turn on initialization done I/O signal
 		Ros_Controller_SetIOState(IO_FEEDBACK_INITIALIZATION_DONE, TRUE);

@@ -101,16 +101,22 @@ CtrlGroup* Ros_CtrlGroup_Create(int groupNo, float interpolPeriod)
 		ctrlGroup->groupId = Ros_CtrlGroup_FindGrpId(groupNo);
 		
 		status = GP_getPulseToRad(groupNo, &ctrlGroup->pulseToRad);
-		if(status!=OK)
+		if(status!=OK) {
+            printf("GP_getPulseToRad != OK\r\n");
 			bInitOk = FALSE;
+        }
 
 		status = GP_getFBPulseCorrection(groupNo, &ctrlGroup->correctionData);
-		if(status!=OK)
+		if(status!=OK) {
+            printf("GP_getFBPulseCorrection != OK\r\n");
 			bInitOk = FALSE;
+        }
 
 		status = GP_getMaxIncPerIpCycle(groupNo, interpolPeriod , &ctrlGroup->maxInc);
-		if(status!=OK)
+		if(status!=OK) {
+            printf("GP_getMaxIncPerIpCycle != OK\r\n");
 			bInitOk = FALSE;
+        }
 
 		memset(&ctrlGroup->inc_q, 0x00, sizeof(Incremental_q));
 		ctrlGroup->inc_q.q_lock = mpSemBCreate(SEM_Q_FIFO, SEM_FULL);
@@ -122,8 +128,10 @@ CtrlGroup* Ros_CtrlGroup_Create(int groupNo, float interpolPeriod)
 			for(i=0; i<numAxes; i++)
 				ctrlGroup->maxInc.maxIncrement[i] *= speedCap;
 		}
-		else
+		else {
+            printf("GP_getGovForIncMotion == -1\r\n");
 			bInitOk = FALSE;
+        }
 #endif
 
 		// Calculate maximum speed in radian per second
