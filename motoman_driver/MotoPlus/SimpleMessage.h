@@ -32,7 +32,7 @@
 #ifndef SIMPLE_MSG_H
 #define SIMPLE_MSG_H
 
-#define ROS_MAX_JOINT 10
+#define ROS_MAX_JOINT 13
 
 //----------------
 // Prefix Section

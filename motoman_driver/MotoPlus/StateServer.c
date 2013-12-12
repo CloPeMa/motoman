@@ -99,28 +99,49 @@ void Ros_StateServer_StartNewConnection(Controller* controller, int sd)
 void Ros_StateServer_SendState(Controller* controller)
 {
 	BOOL bHasConnections = TRUE;
-	int groupNo;
-	SimpleMsg sendMsg;
+	int groupNo, i;
+	SimpleMsg sendMsg, partialMsg;
 	int msgSize;
+    int index = 0;
+
 	
 	printf("Starting State Server Send State task\r\n");
 	printf("Controller number of group = %d\r\n", controller->numGroup);
 	
 	while(bHasConnections)
 	{
+        // Cler message
+        memset(&sendMsg, 0x00, sizeof(SimpleMsg));
+
 		// Send position for each control group
 		for(groupNo=0; groupNo < controller->numGroup; groupNo++)
 		{
-			msgSize = Ros_SimpleMsg_JointFeedback(controller->ctrlGroups[groupNo], &sendMsg);
+			msgSize = Ros_SimpleMsg_JointFeedback(controller->ctrlGroups[groupNo], &partialMsg);
 			if(msgSize > 0)
 			{
-				bHasConnections = Ros_StateServer_SendMsgToAllClient(controller, &sendMsg, msgSize);
+                // Copy header from the firs message
+                if (groupNo == 0) {
+                    sendMsg.prefix.length = partialMsg.prefix.length;
+                    sendMsg.header.msgType = partialMsg.header.msgType;
+                    sendMsg.header.commType = partialMsg.header.commType;
+                    sendMsg.header.replyType = partialMsg.header.replyType;
+                    sendMsg.body.jointFeedback.groupNo = partialMsg.body.jointFeedback.groupNo;
+                    sendMsg.body.jointFeedback.validFields = partialMsg.body.jointFeedback.validFields;
+                }
+
+                // Copy values from partial message
+                for (i=0; i < controller->ctrlGroups[groupNo]->numAxes; i++) {
+                    sendMsg.body.jointFeedback.pos[i + index] = partialMsg.body.jointFeedback.pos[i];
+                }
+                index = controller->ctrlGroups[groupNo]->numAxes;
 			}
 			else
 			{
 				printf("Ros_SimpleMsg_JointFeedback returned a message size of 0\r\n");
 			}
 		}
+        msgSize = (sendMsg.prefix.length + sizeof(SmPrefix));
+        bHasConnections = Ros_StateServer_SendMsgToAllClient(controller, &sendMsg, msgSize);
 
 		// Send controller/robot status
 		if(bHasConnections)
