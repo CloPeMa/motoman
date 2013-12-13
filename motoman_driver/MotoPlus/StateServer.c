@@ -112,6 +112,7 @@ void Ros_StateServer_SendState(Controller* controller)
 	{
         // Cler message
         memset(&sendMsg, 0x00, sizeof(SimpleMsg));
+        index = 0;
 
 		// Send position for each control group
 		for(groupNo=0; groupNo < controller->numGroup; groupNo++)
@@ -130,10 +131,10 @@ void Ros_StateServer_SendState(Controller* controller)
                 }
 
                 // Copy values from partial message
-                for (i=0; i < controller->ctrlGroups[groupNo]->numAxes; i++) {
+                for (i = 0; i < controller->ctrlGroups[groupNo]->numAxes; i++) {
                     sendMsg.body.jointFeedback.pos[i + index] = partialMsg.body.jointFeedback.pos[i];
                 }
-                index = controller->ctrlGroups[groupNo]->numAxes;
+                index += controller->ctrlGroups[groupNo]->numAxes;
 			}
 			else
 			{
