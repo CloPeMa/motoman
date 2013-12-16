@@ -92,6 +92,8 @@ def get_pos_from_bag(bag_file, topic_name):
 #   - override default list with ROS param '~joint_names', if present
 def get_joint_names(num_joints):
 
+
+
   if num_joints == 6:
     default_names = ['joint_'+j for j in ['s','l','u','r','b','t']]
   elif num_joints == 7:
@@ -99,7 +101,7 @@ def get_joint_names(num_joints):
   else:
     default_names = ''
 
-  return rospy.get_param('~joint_names', default_names)
+  return ['r1_joint_s', 'r1_joint_l', 'r1_joint_u', 'r1_joint_r', 'r1_joint_b', 'r1_joint_t', 'r2_joint_s', 'r2_joint_l', 'r2_joint_u', 'r2_joint_r', 'r2_joint_b', 'r2_joint_t', 'ext_axis']
 
 # parse the input arguments
 def parse_args(args):
