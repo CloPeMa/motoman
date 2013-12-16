@@ -67,6 +67,7 @@ int Ros_MotionServer_GetQueueCnt(Controller* controller, int groupNo);
 void Ros_MotionServer_IncMoveLoopStart(Controller* controller);
 // Utility functions:
 void Ros_MotionServer_ConvertToJointMotionData(SmBodyJointTrajPtFull* jointTrajData, JointMotionData* jointMotionData);
+int Ros_MotionServer_CheckAddTrajectoryPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFull* jointTrajData);
 
 
 //-----------------------
@@ -595,9 +596,13 @@ BOOL Ros_MotionServer_StopTrajMode(Controller* controller)
 int Ros_MotionServer_JointTrajDataProcess(Controller* controller, SimpleMsg* receiveMsg, 
 											SimpleMsg* replyMsg)
 {
-	SmBodyJointTrajPtFull* trajData;
+	SmBodyJointTrajPtFull trajData[3];
 	CtrlGroup* ctrlGroup;
-	int ret;
+	int ret = 0;
+    int ret_ = 0;
+    int groupNo;
+    int index;
+    int i;
 
 	// Check if controller is able to receive incremental move and if the incremental move thread is running
 	if(!Ros_Controller_IsMotionReady(controller))
@@ -609,60 +614,137 @@ int Ros_MotionServer_JointTrajDataProcess(Controller* controller, SimpleMsg* rec
 	}
 
 	// Set pointer reference
-	trajData = &receiveMsg->body.jointTrajData;
-	
-	// Check group number valid
-	if(Ros_Controller_IsValidGroupNo(controller, trajData->groupNo))
-	{
-		ctrlGroup = controller->ctrlGroups[trajData->groupNo];
-	}
-	else
-	{
-		Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_GROUPNO, replyMsg);
-		return 0;
-	}
-	
-	// Check that minimum information (time, position, velocity) is valid
-	if( (trajData->validFields & 0x07) != 0x07 )
-	{
-		printf("ERROR: Validfields = %d\r\n", trajData->validFields);
-		Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_DATA_INSUFFICIENT, replyMsg);
-		return 0;
-	}
+    memset(&trajData, 0x00, sizeof(SmBodyJointTrajPtFull) * controller->numGroup);
+    index = 0;
+    for(groupNo=0; groupNo < controller->numGroup; groupNo++)
+    {
 
-	// Check the trajectory sequence code
-	if(trajData->sequence == 0) // First trajectory point
-	{
-		// Initialize first point variables
-		ret = Ros_MotionServer_InitTrajPointFull(ctrlGroup, trajData);
-		
-		// set reply
-		if(ret == 0)
-			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg);
-		else
-			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ret, replyMsg);
-	}
-	else if(trajData->sequence > 0)// Subsequent trajectory points
-	{
-		// Add the point to the trajectory
-		ret = Ros_MotionServer_AddTrajPointFull(ctrlGroup, trajData);
-		
-		// ser reply
-		if(ret == 0)
-			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg);
-		else if(ret == 1)
-			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_BUSY, 0, replyMsg);
-		else
-			Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ret, replyMsg);	
-	}
-	else
-	{
-		Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_SEQUENCE, replyMsg);
-	}
+        // Check group number valid
+        if(Ros_Controller_IsValidGroupNo(controller, groupNo))
+        {
+            ctrlGroup = controller->ctrlGroups[groupNo];
+        }
+        else
+        {
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_GROUPNO, replyMsg);
+            return 0;
+        }
 
+        trajData[groupNo].groupNo = groupNo;
+        trajData[groupNo].sequence = receiveMsg->body.jointTrajData.sequence;
+        trajData[groupNo].validFields = receiveMsg->body.jointTrajData.validFields;
+        trajData[groupNo].time = receiveMsg->body.jointTrajData.time;
+
+        // Copy values from partial message
+        for (i = 0; i < controller->ctrlGroups[groupNo]->numAxes; i++) {
+            trajData[groupNo].pos[i] = receiveMsg->body.jointTrajData.pos[index + i];
+            trajData[groupNo].vel[i] = receiveMsg->body.jointTrajData.vel[index + i];
+            trajData[groupNo].acc[i] = receiveMsg->body.jointTrajData.acc[index + i];
+        }
+        index += controller->ctrlGroups[groupNo]->numAxes;
+
+        // Check that minimum information (time, position, velocity) is valid
+        if( (trajData->validFields & 0x07) != 0x07 )
+        {
+            printf("ERROR: Validfields = %d\r\n", trajData->validFields);
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_DATA_INSUFFICIENT, replyMsg);
+            return 0;
+        }
+
+    }
+
+    if(receiveMsg->body.jointTrajData.sequence == 0)
+    {
+        for(groupNo=0; groupNo < controller->numGroup; groupNo++)
+        {
+            ctrlGroup = controller->ctrlGroups[groupNo];
+            ret = 0;
+            ret_ = Ros_MotionServer_InitTrajPointFull(ctrlGroup, &trajData[groupNo]);
+
+            if (ret_ != 0) {
+                ret = ret_;
+                printf("InitTrajPointFull() = %d, groupNo = %d", ret, groupNo);
+            }
+        }
+
+        // set reply
+        if(ret == 0) {
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg);
+        } else {
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ret, replyMsg);
+        }
+    }
+    else if(receiveMsg->body.jointTrajData.sequence > 0)
+    {
+
+        for(groupNo=0; groupNo < controller->numGroup; groupNo++)
+        {
+            ctrlGroup = controller->ctrlGroups[groupNo];
+            ret = 0;
+            ret_ = Ros_MotionServer_CheckAddTrajectoryPointFull(ctrlGroup, &trajData[groupNo]);
+
+            if (ret_ != 0) {
+                ret = ret_;
+                printf("CheckAddTrajectoryPointFull() = %d, groupNo = %d", ret, groupNo);
+            }
+        }
+
+        // ser reply
+        if(ret == 0) {
+            for(groupNo=0; groupNo < controller->numGroup; groupNo++)
+            {
+                ctrlGroup = controller->ctrlGroups[groupNo];
+                ret = Ros_MotionServer_AddTrajPointFull(ctrlGroup, &trajData[groupNo]);
+            }
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_SUCCESS, 0, replyMsg);
+        } else if(ret == 1) {
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_BUSY, 0, replyMsg);
+        } else {
+            Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ret, replyMsg);
+        }
+
+    } else {
+        Ros_SimpleMsg_MotionReply(receiveMsg, ROS_RESULT_INVALID, ROS_RESULT_INVALID_SEQUENCE, replyMsg);
+        return 0;
+    }
 	return 0;
 }
 
+int Ros_MotionServer_CheckAddTrajectoryPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFull* jointTrajData)
+{
+    int i;
+    JointMotionData jointData;
+
+    if(ctrlGroup->hasDataToProcess)
+    {
+        return ROS_RESULT_BUSY;
+    }
+
+    // Convert message data to a jointMotionData
+    Ros_MotionServer_ConvertToJointMotionData(jointTrajData, &jointData);
+
+    // Check that incoming data is valid
+    for(i=0; i<ctrlGroup->numAxes; i++)
+    {
+        // Check position softlimit
+        // TODO? Note need to add function to Parameter Extraction Library
+
+        // Velocity check
+        if(abs(jointData.vel[i]) > ctrlGroup->maxSpeedRad[i])
+        {
+            // excessive speed
+            printf("ERROR: Invalid speed in message TrajPointFull data: \r\n  axis: %d, speed: %f, limit: %f\r\n", 
+                    i, jointData.vel[i], ctrlGroup->maxSpeedRad[i]);
+
+#ifdef DEBUG
+            Ros_SimpleMsg_DumpTrajPtFull(jointTrajData);
+#endif
+
+            return ROS_RESULT_INVALID_DATA_SPEED;
+        }
+    }
+    return 0;
+}
 
 //-----------------------------------------------------------------------
 // Setup the first point of a trajectory
@@ -724,39 +806,10 @@ int Ros_MotionServer_InitTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFu
 //-----------------------------------------------------------------------
 int Ros_MotionServer_AddTrajPointFull(CtrlGroup* ctrlGroup, SmBodyJointTrajPtFull* jointTrajData)
 {
-	int i;
 	JointMotionData jointData;
 
-	// Check that there isn't data current being processed
-	if(ctrlGroup->hasDataToProcess)
-	{
-		// Busy
-		return ROS_RESULT_BUSY;
-	}
-	
 	// Convert message data to a jointMotionData
 	Ros_MotionServer_ConvertToJointMotionData(jointTrajData, &jointData);
-			
-	// Check that incoming data is valid
-	for(i=0; i<ctrlGroup->numAxes; i++)
-	{
-		// Check position softlimit
-		// TODO? Note need to add function to Parameter Extraction Library
-		
-		// Velocity check
-		if(abs(jointData.vel[i]) > ctrlGroup->maxSpeedRad[i])
-		{
-			// excessive speed
-			printf("ERROR: Invalid speed in message TrajPointFull data: \r\n  axis: %d, speed: %f, limit: %f\r\n", 
-				i, jointData.vel[i], ctrlGroup->maxSpeedRad[i]);
-				
-			#ifdef DEBUG
-				Ros_SimpleMsg_DumpTrajPtFull(jointTrajData);
-			#endif
-	
-			return ROS_RESULT_INVALID_DATA_SPEED;
-		}
-	}			
 
 	// Store of the message trajectory data to the control group for processing 
 	memcpy(&ctrlGroup->jointMotionDataToProcess, &jointData, sizeof(JointMotionData));
