@@ -253,9 +253,9 @@ BOOL Ros_CtrlGroup_GetFBPulsePos(CtrlGroup* ctrlGroup, long pulsePos[MAX_PULSE_A
     	FB_AXIS_CORRECTION *corr = &ctrlGroup->correctionData.correction[i];
     	if (corr->bValid)
     	{
-		    int src_axis = corr->ulSourceAxis;
-		    int dest_axis = corr->ulCorrectionAxis;
-		    pulse_data.lPos[dest_axis] -= (int)(pulse_data.lPos[src_axis] * corr->fCorrectionRatio);
+		    int src_axis = corr->ulSourceAxis - 1;
+		    int dest_axis = corr->ulCorrectionAxis - 1;
+		    pulse_data.lPos[dest_axis] = (int)(pulse_data.lPos[src_axis] * (1000 / corr->fCorrectionRatio));
     	}
   	}
   	
